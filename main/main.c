@@ -28,8 +28,8 @@ color_t stops[7] = {
     {255, 0, 255}, // magenta
 };
 
-#define LED_WIDTH 50
-#define LED_HEIGHT 6
+#define LED_WIDTH 100
+#define LED_HEIGHT 3
 #define NUM_PIXEL (LED_WIDTH * LED_HEIGHT)
 
 // LED data wires on D1, D2, D4
@@ -100,7 +100,6 @@ void app_main() {
   srand(esp_random());
   int mode = 0;
   while (1) {
-    clear_display();
     int next = 0;
     switch (mode) {
     case 0:
@@ -165,9 +164,9 @@ void write_ws2811_bit(int p, int b) {
 void write_ws2811_data() {
   taskENTER_CRITICAL();
   for (int j = 0; j < LED_HEIGHT; j++) {
-    int reverse = j % 2;
     int pin;
-    switch (j / 2) {
+    switch (j) {
+    default:
     case 0:
       pin = LED_A_PIN;
       break;
@@ -179,7 +178,7 @@ void write_ws2811_data() {
       break;
     }
     for (int i = 0; i < LED_WIDTH; i++) {
-      color_t *c = &pixels[LED_WIDTH * j + (reverse ? LED_WIDTH - i - 1 : i)];
+      color_t *c = &pixels[LED_WIDTH * j + i];
       for (int bi = 0; bi < 8; bi++) {
         write_ws2811_bit(pin, (c->b & (1 << (7 - bi))) ? 1 : 0);
       }
@@ -205,8 +204,8 @@ static color_t snow_colors[4] = {
 };
 
 typedef struct {
-  uint16_t x : 10; // 6.4
-  uint16_t y : 6;  // 3.3
+  uint16_t x : 14; // 10.4
+  uint16_t y : 2;
 } particle_pos_t;
 
 #define NUM_SNOW_PARTICLE 50
@@ -216,26 +215,29 @@ static int snowy() {
   static particle_pos_t particles[NUM_SNOW_PARTICLE];
   static int timer = NUM_SNOW_TICKS;
   static int snow_color_idx = 0;
+
   if (timer == NUM_SNOW_TICKS) {
     snow_color_idx = rand() & 3;
     for (int i = 0; i < NUM_SNOW_PARTICLE; i++) {
       particles[i].x = rand() % (LED_WIDTH << 4);
-      particles[i].y = rand() % (LED_HEIGHT << 3);
+      particles[i].y = rand() % LED_HEIGHT;
     }
   }
+
+  clear_display();
   for (int i = 0; i < NUM_SNOW_PARTICLE; i++) {
     int x = particles[i].x >> 4;
-    int y = particles[i].y >> 3;
+    int y = particles[i].y;
     if (x >= 0 && x < LED_WIDTH && y >= 0 && y < LED_HEIGHT) {
-      pixels[LED_WIDTH * y + x] =
-          snow_colors[(y < 3 ? 2 : 0) | ((snow_color_idx ^ i) & 3)];
+      pixels[LED_WIDTH * y + x] = snow_colors[(snow_color_idx ^ i) & 3];
     }
     particles[i].x += 1 + (i & 1);
     if (particles[i].x >= (LED_WIDTH << 4)) {
       particles[i].x = 0;
-      particles[i].y = rand() % (LED_HEIGHT << 3);
+      particles[i].y = rand() % LED_HEIGHT;
     }
   }
+
   timer--;
   if (timer == 0) {
     timer = NUM_SNOW_TICKS;
@@ -248,65 +250,50 @@ static int snowy() {
 #define NUM_RAINBOW_TICKS 200
 
 static int rainbow_drops() {
-  static particle_pos_t particles[NUM_RAINBOW_DROPS];
+  static int xs[NUM_RAINBOW_DROPS];
+  static uint8_t ys[NUM_RAINBOW_DROPS];
+  static int xvs[NUM_RAINBOW_DROPS];
   static uint8_t gradient_offsets[NUM_RAINBOW_DROPS];
-  static int radii[NUM_RAINBOW_DROPS];
-  static uint8_t life[NUM_RAINBOW_DROPS];
   static int timer = NUM_RAINBOW_TICKS;
+
   if (timer == NUM_RAINBOW_TICKS) {
+    clear_display();
     for (int i = 0; i < NUM_RAINBOW_DROPS; i++) {
-      particles[i].x = rand() % (LED_WIDTH << 4);
-      particles[i].y = rand() % (LED_HEIGHT << 3);
+      xs[i] = rand() % (LED_WIDTH << 4);
+      ys[i] = rand() % LED_HEIGHT;
+      xvs[i] = 3 + (rand() & 3);
+      if (rand() & 1) {
+        xvs[i] = -xvs[i];
+      }
       gradient_offsets[i] = rand() % NUM_GRADIENT;
-      radii[i] = 0;
     }
-  }
-
-  for (int i = 0; i < NUM_RAINBOW_DROPS; i++) {
-    life[i] = 0;
-  }
-
-  for (int y = 0; y < LED_HEIGHT; y++) {
-    for (int x = 0; x < LED_WIDTH; x++) {
-      for (int i = 0; i < NUM_RAINBOW_DROPS; i++) {
-        int dx = (x << 4) - particles[i].x;
-        int dy = (y << 3) - particles[i].y;
-        // scale dy for aspect ratio correction
-        dy *= 4;
-        // correct for fixed point (4+1 to match fractions)
-        int d2 = ((dx * dx) >> 5) + ((dy * dy) >> 3);
-        int a = radii[i] - (2 << 3);
-        int b = radii[i] + (2 << 3);
-        int ai = radii[i] - (1 << 3);
-        int bi = radii[i] + (1 << 3);
-        int a2 = (a > 0) ? ((a * a) >> 3) : 0;
-        int b2 = (b > 0) ? ((b * b) >> 3) : 0;
-        int ai2 = (ai > 0) ? ((ai * ai) >> 3) : 0;
-        int bi2 = (bi > 0) ? ((bi * bi) >> 3) : 0;
-
-        if (d2 >= a2 && d2 <= b2) {
-          life[i] = 1;
-          color_t *c = &pixels[LED_WIDTH * y + x];
-          *c = gradient[(gradient_offsets[i] + (d2 >> 4)) % NUM_GRADIENT];
-          if (d2 >= bi2 || d2 <= ai2) { // fade edges
-            c->r >>= 1;
-            c->g >>= 1;
-            c->b >>= 1;
-          }
-        }
+  } else {
+    for (int j = 0; j < LED_HEIGHT; j++) {
+      for (int i = 0; i < LED_WIDTH; i++) {
+        int idx = LED_WIDTH * j + i;
+        pixels[idx].r = (uint8_t)(((int)pixels[idx].r * 3) >> 2);
+        pixels[idx].g = (uint8_t)(((int)pixels[idx].g * 3) >> 2);
+        pixels[idx].b = (uint8_t)(((int)pixels[idx].b * 3) >> 2);
       }
     }
   }
 
   for (int i = 0; i < NUM_RAINBOW_DROPS; i++) {
-    if (life[i] == 0) {
-      particles[i].x = rand() % (LED_WIDTH << 4);
-      particles[i].y = rand() % (LED_HEIGHT << 3);
+    int x = xs[i];
+    if (x < 0 || x >= (LED_WIDTH << 4)) {
+      // birth
+      x = xs[i] = rand() % (LED_WIDTH << 4);
+      ys[i] = rand() % LED_HEIGHT;
+      xvs[i] = 3 + (rand() & 3);
+      if (rand() & 1) {
+        xvs[i] = -xvs[i];
+      }
       gradient_offsets[i] = rand() % NUM_GRADIENT;
-      radii[i] = 0;
-    } else {
-      radii[i] += 3;
     }
+    int y = ys[i];
+    pixels[LED_WIDTH * y + (x >> 4)] = gradient[gradient_offsets[i]];
+    gradient_offsets[i] = (gradient_offsets[i] + 1) % NUM_GRADIENT;
+    xs[i] += xvs[i];
   }
 
   timer--;
