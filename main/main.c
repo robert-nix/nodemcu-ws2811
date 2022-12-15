@@ -1,16 +1,7 @@
-/* Hello World Example
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
 #define bool _Bool
 
 #include "driver/adc.h"
 #include "driver/gpio.h"
-#include "driver/hw_timer.h"
 #include "esp8266/gpio_struct.h"
 #include "esp_spi_flash.h"
 #include "esp_system.h"
@@ -18,8 +9,6 @@
 #include "freertos/task.h"
 #include <stdio.h>
 #include <string.h>
-
-#include "font.h"
 
 typedef struct {
   uint8_t r, g, b;
@@ -53,32 +42,17 @@ int led_pins[3] = {LED_A_PIN, LED_B_PIN, LED_C_PIN};
 color_t pixels[NUM_PIXEL];
 
 void clear_display();
-void show_text(char *s, int scroll);
-int get_text_width(char *s);
 
 void write_ws2811_bit(int pin, int b);
 void write_ws2811_data();
 
 void timer_callback(void *);
 
-static int scroller(char *);
 static int snowy();
 static int rainbow_drops();
 
 void app_main() {
   printf("=> xmas22 starting\n");
-
-  // Print chip information
-  //   esp_chip_info_t chip_info;
-  //   esp_chip_info(&chip_info);
-  //   printf("This is ESP8266 chip with %d CPU cores, WiFi, ",
-  //   chip_info.cores);
-
-  //   printf("silicon revision %d, ", chip_info.revision);
-
-  //   printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
-  //          (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded"
-  //                                                        : "external");
 
   // TOUT (this is a nodeMCU) is ADC0 divided by 220kOhm and 100kOhm
   // ADC0 is then divided by 20kOhm and 100kOhm
@@ -90,12 +64,6 @@ void app_main() {
       .clk_div = 8,
   };
   adc_init(&adc_config);
-
-  //   hw_timer_init(timer_callback, NULL);
-  //   hw_timer_set_reload(1);
-  //   hw_timer_set_clkdiv(TIMER_CLKDIV_1);
-  //   hw_timer_set_load_data(400); // 100kHz square wave
-  //   hw_timer_enable(1);
 
   for (int i = 0; i < 3; i++) {
     gpio_config_t io_conf;
@@ -131,31 +99,20 @@ void app_main() {
 
   srand(esp_random());
   int mode = 0;
-  char text[128];
-  sprintf(text, "hello");
   while (1) {
     clear_display();
     int next = 0;
     switch (mode) {
     case 0:
-      next = scroller(text);
-      break;
-    case 1:
       next = snowy();
       break;
-    case 2:
+    case 1:
       next = rainbow_drops();
       break;
     }
 
     if (next) {
-      mode = (mode + 1) % 3;
-      if (mode == 0) {
-        uint16_t adc = 0;
-        adc_read(&adc);
-        uint32_t voltage = ((uint32_t)adc * 4336) >> 8;
-        sprintf(text, "Voltage: %d mV", voltage);
-      }
+      mode = (mode + 1) % 2;
     }
 
     write_ws2811_data();
@@ -238,63 +195,6 @@ void write_ws2811_data() {
 }
 
 void clear_display() { memset(pixels, 0, sizeof(pixels)); }
-
-void show_text(char *s, int scroll) {
-  int col = -scroll;
-  while (*s) {
-    char c = *s++;
-    if (c < ' ' || c > '~') {
-      c = ' ';
-    }
-    int gi = (c - ' ');
-    uint8_t *g = &font_glyph_bitmap[gi * GLYPH_HEIGHT];
-    uint8_t w = font_glyph_widths[gi];
-    for (int j = 0; j < GLYPH_HEIGHT; j++) {
-      for (int i = 0; i < w; i++) {
-        if (col + i < 0)
-          continue;
-        if (col + i >= LED_WIDTH) {
-          continue;
-        }
-        if (g[j] & (1 << (7 - i))) {
-          pixels[LED_WIDTH * j + col + i] = gradient[col + i];
-        }
-      }
-    }
-    col += w + 1;
-    if (col >= LED_WIDTH) {
-      break;
-    }
-  }
-}
-
-int get_text_width(char *s) {
-  int w = 0;
-  while (*s) {
-    char c = *s++;
-    if (c < ' ' || c > '~') {
-      c = ' ';
-    }
-    w += font_glyph_widths[c - ' '] + 1;
-  }
-  return w;
-}
-
-static int scroller(char *scroll_text) {
-  static int scroll = 0;
-  static int wait = 30;
-  show_text(scroll_text, scroll);
-  if (!(--wait)) {
-    scroll++;
-    wait = 3;
-    if (scroll >= get_text_width(scroll_text) - (LED_WIDTH / 2)) {
-      scroll = 0;
-      wait = 30;
-      return 1;
-    }
-  }
-  return 0;
-}
 
 // white and three shades of ice blue
 static color_t snow_colors[4] = {
