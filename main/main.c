@@ -116,7 +116,7 @@ void app_main() {
 
     write_ws2811_data();
 
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(20 / portTICK_PERIOD_MS);
   }
 }
 
@@ -246,7 +246,7 @@ static int snowy() {
   return 0;
 }
 
-#define NUM_RAINBOW_DROPS 4
+#define NUM_RAINBOW_DROPS 6
 #define NUM_RAINBOW_TICKS 200
 
 static int rainbow_drops() {

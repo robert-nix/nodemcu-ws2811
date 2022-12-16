@@ -1,5 +1,5 @@
-# Hello World Example
+# ws2811 nodeMCU edition
 
-Starts a FreeRTOS task to print "Hello World"
+This simple program uses the FreeRTOS-derived ESP8266 SDK to drive 3 strips of 100 ws2811's.
 
-See the README.md file in the upper level 'examples' directory for more information about examples.
+This must be compiled with -O3; the GPIO output will be too slow without optimizations enabled.
