@@ -50,6 +50,7 @@ void timer_callback(void *);
 
 static int snowy();
 static int rainbow_drops();
+static int candy_cane();
 
 void app_main() {
   printf("=> xmas22 starting\n");
@@ -108,10 +109,13 @@ void app_main() {
     case 1:
       next = rainbow_drops();
       break;
+    case 2:
+      next = candy_cane();
+      break;
     }
 
     if (next) {
-      mode = (mode + 1) % 2;
+      mode = (mode + 1) % 3;
     }
 
     write_ws2811_data();
@@ -209,7 +213,7 @@ typedef struct {
 } particle_pos_t;
 
 #define NUM_SNOW_PARTICLE 50
-#define NUM_SNOW_TICKS 200
+#define NUM_SNOW_TICKS 1000
 
 static int snowy() {
   static particle_pos_t particles[NUM_SNOW_PARTICLE];
@@ -247,7 +251,7 @@ static int snowy() {
 }
 
 #define NUM_RAINBOW_DROPS 6
-#define NUM_RAINBOW_TICKS 200
+#define NUM_RAINBOW_TICKS 1000
 
 static int rainbow_drops() {
   static int xs[NUM_RAINBOW_DROPS];
@@ -299,6 +303,73 @@ static int rainbow_drops() {
   timer--;
   if (timer == 0) {
     timer = NUM_RAINBOW_TICKS;
+    return 1;
+  }
+  return 0;
+}
+
+#define NUM_CANDY_CANE_TICKS 1000
+
+static color_t white = {255, 255, 255};
+
+static int candy_cane() {
+  // scroller with a wwgrrrgww block
+  static int x[LED_HEIGHT];
+  static int timer = NUM_CANDY_CANE_TICKS;
+
+  if (timer == NUM_CANDY_CANE_TICKS) {
+    for (int i = 0; i < LED_HEIGHT; i++) {
+      x[i] = rand() % LED_WIDTH;
+    }
+  }
+
+  clear_display();
+  for (int j = 0; j < LED_HEIGHT; j++) {
+    int n = x[j];
+    for (int i = 0; i < LED_WIDTH; i++) {
+      n++;
+      if (n >= LED_WIDTH) {
+        n -= LED_WIDTH;
+      }
+      switch (i & 31) {
+      case 0:
+        pixels[LED_WIDTH * j + n] = white;
+        break;
+      case 1:
+        pixels[LED_WIDTH * j + n] = white;
+        break;
+      case 2:
+        pixels[LED_WIDTH * j + n] = stops[3];
+        break;
+      case 3:
+        pixels[LED_WIDTH * j + n] = stops[0];
+        break;
+      case 4:
+        pixels[LED_WIDTH * j + n] = stops[0];
+        break;
+      case 5:
+        pixels[LED_WIDTH * j + n] = stops[0];
+        break;
+      case 6:
+        pixels[LED_WIDTH * j + n] = stops[3];
+        break;
+      case 7:
+        pixels[LED_WIDTH * j + n] = white;
+        break;
+      case 8:
+        pixels[LED_WIDTH * j + n] = white;
+        break;
+      }
+    }
+    x[j]++;
+    if (x[j] >= LED_WIDTH) {
+      x[j] -= LED_WIDTH;
+    }
+  }
+
+  timer--;
+  if (timer == 0) {
+    timer = NUM_CANDY_CANE_TICKS;
     return 1;
   }
   return 0;
